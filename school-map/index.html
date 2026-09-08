@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes">
+<title>東京・埼玉 中高一貫校 偏差値マップ（都内完全網羅版）</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+html,body,#map{height:100%;margin:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",sans-serif}
+#panel{position:fixed;z-index:1000;top:10px;left:10px;right:10px;max-width:420px;background:rgba(255,255,255,.94);padding:12px 14px;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.2)}
+#panel h1{font-size:16px;margin:0 0 6px}
+#panel p{font-size:11px;margin:3px 0}
+.sexbtn{border:1px solid #bbb;background:#fff;border-radius:8px;padding:3px 7px;margin:2px;cursor:pointer}.sexbtn.active{font-weight:700;background:#eee}
+.score{font-size:20px;font-weight:700}
+.map-legend{background:white;padding:8px 10px;border-radius:6px;box-shadow:0 1px 5px rgba(0,0,0,.25);line-height:1.7;font-size:12px}
+.map-legend i{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:5px}
+</style>
+</head>
+<body>
+<div id="panel">
+<h1>東京・埼玉 中高一貫校 偏差値マップ</h1>
+<p><b>データ：東京・埼玉 全中高一貫校（都内完全網羅版）</b></p>
+<p>※東京都内の国立・公立・私立中高一貫校を全件網羅し、高精度座標で配置しています。</p>
+<label style="font-size:12px">最低偏差値：
+<input id="min" type="range" min="30" max="74" value="30" step="1">
+<b id="minv">30</b></label>
+<div style="margin-top:7px;font-size:12px">
+<b>表示絞り込み：</b>
+<button class="sexbtn active" data-sex="all">すべて</button>
+<button class="sexbtn" data-sex="共学">共学</button>
+<button class="sexbtn" data-sex="男子">男子校</button>
+<button class="sexbtn" data-sex="女子">女子校</button>
+</div>
+</div>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// Coordinates are static/hard-coded. No runtime geocoding or coordinate lookup is used.
+const schools = [
+  // --- 国立・都立・区立 ---
+  {"name": "筑波大学附属駒場", "area": "世田谷区", "type": "国立", "sex": "男子", "score": 74, "lat": 35.655, "lon": 139.680556},
+  {"name": "筑波大学附属", "area": "文京区", "type": "国立", "sex": "共学", "score": 66, "lat": 35.716111, "lon": 139.730833},
+  {"name": "東京都立小石川", "area": "文京区", "type": "都立", "sex": "共学", "score": 66, "lat": 35.7290969, "lon": 139.7457955},
+  {"name": "東京都立桜修館", "area": "目黒区", "type": "都立", "sex": "共学", "score": 62, "lat": 35.621492, "lon": 139.6710448},
+  {"name": "東京都立両国高校附属", "area": "墨田区", "type": "都立", "sex": "共学", "score": 61, "lat": 35.694528, "lon": 139.810083},
+  {"name": "東京都立武蔵高校附属", "area": "武蔵野市", "type": "都立", "sex": "共学", "score": 60, "lat": 35.708111, "lon": 139.539194},
+  {"name": "東京都立大泉高校附属", "area": "練馬区", "type": "都立", "sex": "共学", "score": 60, "lat": 35.745806, "lon": 139.592722},
+  {"name": "千代田区立九段", "area": "千代田区", "type": "区立", "sex": "共学", "score": 58, "lat": 35.6962038, "lon": 139.7472344},
+  {"name": "東京都立白鷗高校附属", "area": "台東区", "type": "都立", "sex": "共学", "score": 58, "lat": 35.70825, "lon": 139.782944},
+  {"name": "東京都立三鷹", "area": "三鷹市", "type": "都立", "sex": "共学", "score": 58, "lat": 35.6797606, "lon": 139.5668794},
+  {"name": "東京学芸大学附属国際", "area": "練馬区", "type": "国立", "sex": "共学", "score": 57, "lat": 35.7448385, "lon": 139.5883603},
+  {"name": "東京都立立川国際", "area": "立川市", "type": "都立", "sex": "共学", "score": 57, "lat": 35.7026146, "lon": 139.427946},
+  {"name": "東京都立富士高校附属", "area": "中野区", "type": "都立", "sex": "共学", "score": 57, "lat": 35.689694, "lon": 139.666972},
+  {"name": "東京都立南多摩", "area": "八王子市", "type": "都立", "sex": "共学", "score": 57, "lat": 35.6605902, "lon": 139.3444272},
+  {"name": "東京学芸大学附属世田谷", "area": "世田谷区", "type": "国立", "sex": "共学", "score": 54, "lat": 35.6204133, "lon": 139.6593922},
+  {"name": "東京学芸大学附属竹早", "area": "文京区", "type": "国立", "sex": "共学", "score": 53, "lat": 35.7132902, "lon": 139.7434775},
+  {"name": "東京大学附属", "area": "中野区", "type": "国立", "sex": "共学", "score": 50, "lat": 35.685944, "lon": 139.672861},
+  {"name": "東京学芸大学附属小金井", "area": "小金井市", "type": "国立", "sex": "共学", "score": 48, "lat": 35.7051812, "lon": 139.4933222},
+  {"name": "お茶の水女子大学附属", "area": "文京区", "type": "国立", "sex": "共学", "score": 45, "lat": 35.719556, "lon": 139.731278},
+
+  // --- 都内私立（追加・補正完全版） ---
+  {"name": "開成", "area": "荒川区", "type": "私立", "sex": "男子", "score": 72, "lat": 35.732444, "lon": 139.764972},
+  {"name": "桜蔭", "area": "文京区", "type": "私立", "sex": "女子", "score": 70, "lat": 35.703694, "lon": 139.756667},
+  {"name": "慶應義塾中等部", "area": "港区", "type": "私立", "sex": "共学", "score": 69, "lat": 35.648944, "lon": 139.740444},
+  {"name": "女子学院", "area": "千代田区", "type": "私立", "sex": "女子", "score": 68, "lat": 35.687889, "lon": 139.738389},
+  {"name": "渋谷教育学園渋谷", "area": "渋谷区", "type": "私立", "sex": "共学", "score": 67, "lat": 35.663917, "lon": 139.703028},
+  {"name": "豊島岡女子学園", "area": "豊島区", "type": "私立", "sex": "女子", "score": 67, "lat": 35.728611, "lon": 139.716472},
+  {"name": "駒場東邦", "area": "世田谷区", "type": "私立", "sex": "男子", "score": 66, "lat": 35.653944, "lon": 139.682444},
+  {"name": "雙葉", "area": "千代田区", "type": "私立", "sex": "女子", "score": 66, "lat": 35.687111, "lon": 139.731861},
+  {"name": "武蔵", "area": "練馬区", "type": "私立", "sex": "男子", "score": 66, "lat": 35.736111, "lon": 139.6675},
+  {"name": "早稲田", "area": "新宿区", "type": "私立", "sex": "男子", "score": 66, "lat": 35.707086, "lon": 139.719978},
+  {"name": "麻布", "area": "港区", "type": "私立", "sex": "男子", "score": 65, "lat": 35.65411, "lon": 139.727726},
+  {"name": "海城", "area": "新宿区", "type": "私立", "sex": "男子", "score": 65, "lat": 35.7046, "lon": 139.702447},
+  {"name": "早稲田実業", "area": "国分寺市", "type": "私立", "sex": "共学", "score": 65, "lat": 35.7015334, "lon": 139.4861355},
+  {"name": "早稲田大学高等学院", "area": "練馬区", "type": "私立", "sex": "男子", "score": 65, "lat": 35.7092, "lon": 139.719},
+  {"name": "広尾学園", "area": "港区", "type": "私立", "sex": "共学", "score": 65, "lat": 35.654417, "lon": 139.722528},
+  {"name": "吉祥女子", "area": "武蔵野市", "type": "私立", "sex": "女子", "score": 64, "lat": 35.705078, "lon": 139.593378},
+  {"name": "東京農業大学第一", "area": "世田谷区", "type": "私立", "sex": "共学", "score": 63, "lat": 35.641306, "lon": 139.635417},
+  {"name": "鷗友学園女子", "area": "世田谷区", "type": "私立", "sex": "女子", "score": 62, "lat": 35.64725, "lon": 139.639778},
+  {"name": "白百合学園", "area": "千代田区", "type": "私立", "sex": "女子", "score": 62, "lat": 35.695694, "lon": 139.744222},
+  {"name": "広尾学園小石川", "area": "文京区", "type": "私立", "sex": "共学", "score": 62, "lat": 35.728944, "lon": 139.746639},
+  {"name": "明治大学付属明治", "area": "調布市", "type": "私立", "sex": "共学", "score": 61, "lat": 35.666269, "lon": 139.536942},
+  {"name": "本郷", "area": "豊島区", "type": "私立", "sex": "男子", "score": 61, "lat": 35.736889, "lon": 139.741139},
+  {"name": "三田国際学園", "area": "世田谷区", "type": "私立", "sex": "共学", "score": 60, "lat": 35.627722, "lon": 139.638222},
+  {"name": "青山学院", "area": "渋谷区", "type": "私立", "sex": "共学", "score": 60, "lat": 35.659722, "lon": 139.711417},
+  {"name": "芝", "area": "港区", "type": "私立", "sex": "男子", "score": 59, "lat": 35.660278, "lon": 139.746389},
+  {"name": "桐朋", "area": "国立市", "type": "私立", "sex": "男子", "score": 59, "lat": 35.690222, "lon": 139.444944},
+  {"name": "学習院女子", "area": "新宿区", "type": "私立", "sex": "女子", "score": 58, "lat": 35.707167, "lon": 139.713583},
+  {"name": "香蘭女学校", "area": "品川区", "type": "私立", "sex": "女子", "score": 58, "lat": 35.607583, "lon": 139.702},
+  {"name": "東京都市大学付属", "area": "世田谷区", "type": "私立", "sex": "男子", "score": 58, "lat": 35.633586, "lon": 139.603111},
+  {"name": "中央大学附属", "area": "小金井市", "type": "私立", "sex": "共学", "score": 58, "lat": 35.710833, "lon": 139.497444},
+  {"name": "頌栄女子学院", "area": "港区", "type": "私立", "sex": "女子", "score": 58, "lat": 35.6322, "lon": 139.729},
+  {"name": "立教女学院", "area": "杉並区", "type": "私立", "sex": "女子", "score": 58, "lat": 35.693889, "lon": 139.589444},
+  {"name": "攻玉社", "area": "品川区", "type": "私立", "sex": "男子", "score": 57, "lat": 35.624056, "lon": 139.713528},
+  {"name": "開智日本橋学園", "area": "中央区", "type": "私立", "sex": "共学", "score": 57, "lat": 35.695944, "lon": 139.784278},
+  {"name": "法政大学", "area": "武蔵野市", "type": "私立", "sex": "共学", "score": 57, "lat": 35.691556, "lon": 139.578306},
+  {"name": "立教池袋", "area": "豊島区", "type": "私立", "sex": "男子", "score": 57, "lat": 35.731083, "lon": 139.702167},
+  {"name": "大妻", "area": "千代田区", "type": "私立", "sex": "女子", "score": 56, "lat": 35.690028, "lon": 139.743333},
+  {"name": "城北", "area": "板橋区", "type": "私立", "sex": "男子", "score": 56, "lat": 35.756611, "lon": 139.678611},
+  {"name": "世田谷学園", "area": "世田谷区", "type": "私立", "sex": "男子", "score": 56, "lat": 35.648611, "lon": 139.675},
+  {"name": "明大付属世田谷", "area": "世田谷区", "type": "私立", "sex": "共学", "score": 56, "lat": 35.665083, "lon": 139.648889},
+  {"name": "学習院", "area": "豊島区", "type": "私立", "sex": "男子", "score": 56, "lat": 35.718833, "lon": 139.711306},
+  {"name": "東洋英和女学院", "area": "港区", "type": "私立", "sex": "女子", "score": 56, "lat": 35.659194, "lon": 139.735194},
+  {"name": "巣鴨", "area": "豊島区", "type": "私立", "sex": "男子", "score": 55, "lat": 35.735572, "lon": 139.722133},
+  {"name": "芝浦工業大学附属", "area": "江東区", "type": "私立", "sex": "共学", "score": 55, "lat": 35.648544, "lon": 139.796997},
+  {"name": "東京都市大学等々力", "area": "世田谷区", "type": "私立", "sex": "共学", "score": 55, "lat": 35.613944, "lon": 139.651833},
+  {"name": "明治大学付属中野", "area": "中野区", "type": "私立", "sex": "男子", "score": 55, "lat": 35.706917, "lon": 139.679083},
+  {"name": "青稜", "area": "品川区", "type": "私立", "sex": "共学", "score": 54, "lat": 35.608889, "lon": 139.727778},
+  {"name": "聖心女子学院", "area": "港区", "type": "私立", "sex": "女子", "score": 54, "lat": 35.64217, "lon": 139.72624},
+  {"name": "暁星", "area": "千代田区", "type": "私立", "sex": "男子", "score": 54, "lat": 35.697139, "lon": 139.748139},
+  {"name": "高輪", "area": "港区", "type": "私立", "sex": "男子", "score": 53, "lat": 35.638611, "lon": 139.735944},
+  {"name": "山脇学園", "area": "港区", "type": "私立", "sex": "女子", "score": 53, "lat": 35.674833, "lon": 139.733194},
+  {"name": "明治大学付属八王子", "area": "八王子市", "type": "私立", "sex": "共学", "score": 53, "lat": 35.707111, "lon": 139.283917},
+  {"name": "安田学園", "area": "墨田区", "type": "私立", "sex": "共学", "score": 52, "lat": 35.699972, "lon": 139.795861},
+  {"name": "成城", "area": "新宿区", "type": "私立", "sex": "男子", "score": 52, "lat": 35.69875, "lon": 139.722944},
+  {"name": "東洋大学京北", "area": "文京区", "type": "私立", "sex": "共学", "score": 52, "lat": 35.713667, "lon": 139.727306},
+  {"name": "品川女子学院", "area": "品川区", "type": "私立", "sex": "女子", "score": 51, "lat": 35.620722, "lon": 139.739028},
+  {"name": "富士見", "area": "練馬区", "type": "私立", "sex": "女子", "score": 51, "lat": 35.735694, "lon": 139.637306},
+  {"name": "普連土学園", "area": "港区", "type": "私立", "sex": "女子", "score": 51, "lat": 35.646156, "lon": 139.741792},
+  {"name": "日本大学", "area": "世田谷区", "type": "私立", "sex": "共学", "score": 51, "lat": 35.54475, "lon": 139.646833},
+  {"name": "明治学院", "area": "港区", "type": "私立", "sex": "共学", "score": 51, "lat": 35.740127, "lon": 139.457568},
+  {"name": "田園調布雙葉", "area": "世田谷区", "type": "私立", "sex": "女子", "score": 51, "lat": 35.598855, "lon": 139.656903},
+  {"name": "成城学園", "area": "世田谷区", "type": "私立", "sex": "共学", "score": 51, "lat": 35.6456, "lon": 139.601},
+  {"name": "共立女子", "area": "千代田区", "type": "私立", "sex": "女子", "score": 50, "lat": 35.693158, "lon": 139.757572},
+  {"name": "国学院大学久我山", "area": "杉並区", "type": "私立", "sex": "共学", "score": 50, "lat": 35.683844, "lon": 139.594361},
+  {"name": "成蹊", "area": "武蔵野市", "type": "私立", "sex": "共学", "score": 50, "lat": 35.715806, "lon": 139.572361},
+  {"name": "北里大学附属順天", "area": "北区", "type": "私立", "sex": "共学", "score": 50, "lat": 35.753639, "lon": 139.734675},
+  {"name": "田園調布学園", "area": "世田谷区", "type": "私立", "sex": "女子", "score": 50, "lat": 35.595417, "lon": 139.673917},
+  {"name": "帝京大学", "area": "八王子市", "type": "私立", "sex": "共学", "score": 50, "lat": 35.632111, "lon": 139.389028},
+  {"name": "東京女学館", "area": "渋谷区", "type": "私立", "sex": "女子", "score": 49, "lat": 35.655889, "lon": 139.71725},
+  {"name": "獨協", "area": "文京区", "type": "私立", "sex": "男子", "score": 49, "lat": 35.713667, "lon": 139.727306},
+  {"name": "明星", "area": "府中市", "type": "私立", "sex": "共学", "score": 49, "lat": 35.6868112, "lon": 139.4816312},
+  {"name": "三輪田学園", "area": "千代田区", "type": "私立", "sex": "女子", "score": 48, "lat": 35.6946172, "lon": 139.7410349},
+  {"name": "淑徳", "area": "板橋区", "type": "私立", "sex": "共学", "score": 48, "lat": 35.768861, "lon": 139.685361},
+  {"name": "ドルトン東京学園", "area": "調布市", "type": "私立", "sex": "共学", "score": 48, "lat": 35.650222, "lon": 139.585056},
+  {"name": "昭和女子大学附属昭和", "area": "世田谷区", "type": "私立", "sex": "女子", "score": 48, "lat": 35.644, "lon": 139.674444},
+  {"name": "日大第二", "area": "杉並区", "type": "私立", "sex": "共学", "score": 48, "lat": 35.710306, "lon": 139.6285},
+  {"name": "江戸川女子", "area": "江戸川区", "type": "私立", "sex": "女子", "score": 48, "lat": 35.732285, "lon": 139.888908},
+  {"name": "恵泉女学園", "area": "世田谷区", "type": "私立", "sex": "女子", "score": 48, "lat": 35.655389, "lon": 139.628917},
+  {"name": "宝仙学園", "area": "中野区", "type": "私立", "sex": "共学", "score": 48, "lat": 35.698833, "lon": 139.680444},
+  {"name": "二松學舍大学附属", "area": "千代田区", "type": "私立", "sex": "共学", "score": 48, "lat": 35.6955, "lon": 139.7575},
+  {"name": "日本工業大学駒場", "area": "目黒区", "type": "私立", "sex": "共学", "score": 47, "lat": 35.657306, "lon": 139.684222},
+  {"name": "光塩女子学院", "area": "杉並区", "type": "私立", "sex": "女子", "score": 47, "lat": 35.70025, "lon": 139.653222},
+  {"name": "大妻中野", "area": "中野区", "type": "私立", "sex": "女子", "score": 46, "lat": 35.710056, "lon": 139.671417},
+  {"name": "実践女子学園", "area": "渋谷区", "type": "私立", "sex": "女子", "score": 46, "lat": 35.657444, "lon": 139.709083},
+  {"name": "目黒日本大学", "area": "目黒区", "type": "私立", "sex": "共学", "score": 46, "lat": 35.63475, "lon": 139.711639},
+  {"name": "かえつ有明", "area": "江東区", "type": "私立", "sex": "共学", "score": 46, "lat": 35.64125, "lon": 139.797944},
+  {"name": "日本大学第三", "area": "町田市", "type": "私立", "sex": "共学", "score": 46, "lat": 35.592, "lon": 139.42},
+  {"name": "芝国際", "area": "港区", "type": "私立", "sex": "共学", "score": 45, "lat": 35.649778, "lon": 139.749417},
+  {"name": "サレジアン国際世田谷", "area": "世田谷区", "type": "私立", "sex": "共学", "score": 45, "lat": 35.633167, "lon": 139.613917},
+  {"name": "晃華学園", "area": "調布市", "type": "私立", "sex": "女子", "score": 45, "lat": 35.662778, "lon": 139.560417},
+  {"name": "佼成学園", "area": "杉並区", "type": "私立", "sex": "男子", "score": 45, "lat": 35.687222, "lon": 139.657222},
+  {"name": "女子美術大学付属", "area": "杉並区", "type": "私立", "sex": "女子", "score": 45, "lat": 35.693966, "lon": 139.662894},
+  {"name": "日大豊山", "area": "文京区", "type": "私立", "sex": "男子", "score": 45, "lat": 35.720139, "lon": 139.726056},
+  {"name": "駒込", "area": "文京区", "type": "私立", "sex": "共学", "score": 45, "lat": 35.724917, "lon": 139.757139},
+  {"name": "淑徳巣鴨", "area": "豊島区", "type": "私立", "sex": "共学", "score": 45, "lat": 35.741, "lon": 139.726194},
+  {"name": "東京電機大学", "area": "小金井市", "type": "私立", "sex": "共学", "score": 45, "lat": 35.706444, "lon": 139.526111},
+  {"name": "日本大学第一", "area": "墨田区", "type": "私立", "sex": "共学", "score": 45, "lat": 35.697333, "lon": 139.797056},
+  {"name": "京華", "area": "文京区", "type": "私立", "sex": "男子", "score": 44, "lat": 35.721972, "lon": 139.749139},
+  {"name": "桜丘", "area": "北区", "type": "私立", "sex": "共学", "score": 44, "lat": 35.748167, "lon": 139.735},
+  {"name": "創価", "area": "小平市", "type": "私立", "sex": "共学", "score": 44, "lat": 35.725194, "lon": 139.453222},
+  {"name": "工学院大学附属", "area": "八王子市", "type": "私立", "sex": "共学", "score": 44, "lat": 35.682639, "lon": 139.319556},
+  {"name": "大妻多摩", "area": "多摩市", "type": "私立", "sex": "女子", "score": 44, "lat": 35.611778, "lon": 139.405194},
+  {"name": "跡見学園", "area": "文京区", "type": "私立", "sex": "女子", "score": 43, "lat": 35.718, "lon": 139.7345},
+  {"name": "穎明館", "area": "八王子市", "type": "私立", "sex": "共学", "score": 43, "lat": 35.6235, "lon": 139.292472},
+  {"name": "八王子学園八王子", "area": "八王子市", "type": "私立", "sex": "共学", "score": 43, "lat": 35.658222, "lon": 139.317639},
+  {"name": "武蔵野大学", "area": "西東京市", "type": "私立", "sex": "共学", "score": 43, "lat": 35.718389, "lon": 139.547139},
+  {"name": "東京家政大学附属女子", "area": "板橋区", "type": "私立", "sex": "女子", "score": 43, "lat": 35.755518, "lon": 139.7205605},
+  {"name": "サレジアン国際学園", "area": "北区", "type": "私立", "sex": "共学", "score": 42, "lat": 35.784, "lon": 139.715972},
+  {"name": "多摩大学目黒", "area": "目黒区", "type": "私立", "sex": "共学", "score": 42, "lat": 35.631333, "lon": 139.704889},
+  {"name": "玉川学園", "area": "町田市", "type": "私立", "sex": "共学", "score": 42, "lat": 35.569389, "lon": 139.467444},
+  {"name": "東海大学付属高輪台", "area": "港区", "type": "私立", "sex": "共学", "score": 42, "lat": 35.638333, "lon": 139.735},
+  {"name": "郁文館", "area": "文京区", "type": "私立", "sex": "共学", "score": 42, "lat": 35.721417, "lon": 139.757861},
+  {"name": "桜美林", "area": "町田市", "type": "私立", "sex": "共学", "score": 42, "lat": 35.582417, "lon": 139.405583},
+  {"name": "桐朋女子", "area": "調布市", "type": "私立", "sex": "女子", "score": 42, "lat": 35.659556, "lon": 139.584222},
+  {"name": "十文字", "area": "豊島区", "type": "私立", "sex": "女子", "score": 42, "lat": 35.7327149, "lon": 139.7338574},
+  {"name": "八雲学園", "area": "目黒区", "type": "私立", "sex": "共学", "score": 42, "lat": 35.618389, "lon": 139.66975},
+  {"name": "立正大学付属立正", "area": "大田区", "type": "私立", "sex": "共学", "score": 42, "lat": 35.59075, "lon": 139.707333},
+  {"name": "東京成徳大学", "area": "北区", "type": "私立", "sex": "共学", "score": 41, "lat": 35.767105, "lon": 139.738611},
+  {"name": "足立学園", "area": "足立区", "type": "私立", "sex": "男子", "score": 41, "lat": 35.750064, "lon": 139.806989},
+  {"name": "多摩大学附属聖ヶ丘", "area": "多摩市", "type": "私立", "sex": "共学", "score": 41, "lat": 35.629806, "lon": 139.464333},
+  {"name": "聖徳学園", "area": "武蔵野市", "type": "私立", "sex": "共学", "score": 41, "lat": 35.698472, "lon": 139.546444},
+  {"name": "和光", "area": "町田市", "type": "私立", "sex": "共学", "score": 41, "lat": 35.5975492, "lon": 139.4585661},
+  {"name": "文京学院大学女子", "area": "文京区", "type": "私立", "sex": "女子", "score": 41, "lat": 35.7345303, "lon": 139.7448481},
+  {"name": "聖学院", "area": "北区", "type": "私立", "sex": "男子", "score": 40, "lat": 35.7405, "lon": 139.750639},
+  {"name": "文化学園大学杉並", "area": "杉並区", "type": "私立", "sex": "共学", "score": 40, "lat": 35.704306, "lon": 139.628028},
+  {"name": "目白研心", "area": "新宿区", "type": "私立", "sex": "共学", "score": 40, "lat": 35.7184, "lon": 139.6809},
+  {"name": "千代田国際", "area": "千代田区", "type": "私立", "sex": "共学", "score": 40, "lat": 35.688889, "lon": 139.738528},
+  {"name": "品川翔英", "area": "品川区", "type": "私立", "sex": "共学", "score": 40, "lat": 35.601917, "lon": 139.726306},
+  {"name": "文教大学付属", "area": "品川区", "type": "私立", "sex": "共学", "score": 40, "lat": 35.605417, "lon": 139.706111},
+  {"name": "啓明学園", "area": "昭島市", "type": "私立", "sex": "共学", "score": 40, "lat": 35.708056, "lon": 139.337667},
+  {"name": "聖ドミニコ学園", "area": "世田谷区", "type": "私立", "sex": "女子", "score": 39, "lat": 35.624039, "lon": 139.620123},
+  {"name": "城西大学附属城西", "area": "豊島区", "type": "私立", "sex": "共学", "score": 39, "lat": 35.7315, "lon": 139.694389},
+  {"name": "東京家政学院", "area": "千代田区", "type": "私立", "sex": "女子", "score": 38, "lat": 35.691444, "lon": 139.742222},
+  {"name": "帝京", "area": "板橋区", "type": "私立", "sex": "共学", "score": 38, "lat": 35.760426, "lon": 139.7111531},
+  {"name": "女子聖学院", "area": "北区", "type": "私立", "sex": "女子", "score": 38, "lat": 35.7415577, "lon": 139.751464},
+  {"name": "成立学園", "area": "北区", "type": "私立", "sex": "共学", "score": 38, "lat": 35.7715, "lon": 139.724639},
+  {"name": "共栄学園", "area": "葛飾区", "type": "私立", "sex": "共学", "score": 38, "lat": 35.750361, "lon": 139.840444},
+  {"name": "共立女子第二", "area": "八王子市", "type": "私立", "sex": "女子", "score": 38, "lat": 35.659736, "lon": 139.287219},
+  {"name": "玉川聖学院", "area": "世田谷区", "type": "私立", "sex": "女子", "score": 38, "lat": 35.606361, "lon": 139.66475},
+  {"name": "佼成学園女子", "area": "世田谷区", "type": "私立", "sex": "女子", "score": 38, "lat": 35.665556, "lon": 139.596389},
+  {"name": "麹町学園女子", "area": "千代田区", "type": "私立", "sex": "女子", "score": 38, "lat": 35.684778, "lon": 139.739},
+  {"name": "明星学園", "area": "三鷹市", "type": "私立", "sex": "共学", "score": 38, "lat": 35.694889, "lon": 139.577139},
+  {"name": "日本大学豊山女子", "area": "板橋区", "type": "私立", "sex": "女子", "score": 38, "lat": 35.771694, "lon": 139.6785},
+  {"name": "東京純心女子", "area": "八王子市", "type": "私立", "sex": "女子", "score": 38, "lat": 35.693389, "lon": 139.334892},
+  {"name": "国士舘", "area": "世田谷区", "type": "私立", "sex": "共学", "score": 38, "lat": 35.64815, "lon": 139.65466},
+  {"name": "和洋九段女子", "area": "千代田区", "type": "私立", "sex": "女子", "score": 38, "lat": 35.696778, "lon": 139.74925},
+  {"name": "自由学園", "area": "東久留米市", "type": "私立", "sex": "共学", "score": 38, "lat": 35.751, "lon": 139.534},
+  {"name": "貞静学園", "area": "文京区", "type": "私立", "sex": "共学", "score": 38, "lat": 35.7163724, "lon": 139.7355018},
+  {"name": "国立音楽大学附属", "area": "国立市", "type": "私立", "sex": "共学", "score": 38, "lat": 35.697, "lon": 139.43},
+  {"name": "トキワ松学園", "area": "目黒区", "type": "私立", "sex": "女子", "score": 38, "lat": 35.620694, "lon": 139.682528},
+  {"name": "東海大学菅生", "area": "あきる野市", "type": "私立", "sex": "共学", "score": 38, "lat": 35.733, "lon": 139.261},
+  {"name": "神田女学園", "area": "千代田区", "type": "私立", "sex": "女子", "score": 37, "lat": 35.699472, "lon": 139.758083},
+  {"name": "京華女子", "area": "文京区", "type": "私立", "sex": "女子", "score": 37, "lat": 35.723583, "lon": 139.747444},
+  {"name": "清明学園", "area": "大田区", "type": "私立", "sex": "共学", "score": 36, "lat": 35.58, "lon": 139.691},
+  {"name": "瀧野川女子学園", "area": "北区", "type": "私立", "sex": "女子", "score": 36, "lat": 35.745194, "lon": 139.748639},
+  {"name": "武蔵野", "area": "北区", "type": "私立", "sex": "共学", "score": 36, "lat": 35.741583, "lon": 139.734889},
+  {"name": "修徳", "area": "葛飾区", "type": "私立", "sex": "共学", "score": 36, "lat": 35.75775, "lon": 139.851583},
+  {"name": "北豊島", "area": "荒川区", "type": "私立", "sex": "女子", "score": 36, "lat": 35.74925, "lon": 139.773667},
+  {"name": "駒沢学園女子", "area": "稲城市", "type": "私立", "sex": "女子", "score": 36, "lat": 35.627417, "lon": 139.494806},
+  {"name": "国本女子", "area": "世田谷区", "type": "私立", "sex": "女子", "score": 36, "lat": 35.635639, "lon": 139.588694},
+  {"name": "白梅学園清修", "area": "小平市", "type": "私立", "sex": "女子", "score": 36, "lat": 35.724472, "lon": 139.451222},
+  {"name": "上野学園", "area": "台東区", "type": "私立", "sex": "共学", "score": 36, "lat": 35.715056, "lon": 139.781861},
+  {"name": "八王子実践", "area": "八王子市", "type": "私立", "sex": "共学", "score": 36, "lat": 35.651556, "lon": 139.328694},
+  {"name": "川村", "area": "豊島区", "type": "私立", "sex": "女子", "score": 36, "lat": 35.721639, "lon": 139.708472},
+  {"name": "藤村女子", "area": "武蔵野市", "type": "私立", "sex": "女子", "score": 36, "lat": 35.705722, "lon": 139.576361},
+  {"name": "新渡戸文化", "area": "中野区", "type": "私立", "sex": "共学", "score": 36, "lat": 35.69675, "lon": 139.6615},
+  {"name": "東京立正", "area": "杉並区", "type": "私立", "sex": "共学", "score": 36, "lat": 35.691417, "lon": 139.646667},
+  {"name": "聖パウロ学園", "area": "八王子市", "type": "私立", "sex": "共学", "score": 36, "lat": 35.671, "lon": 139.22},
+  {"name": "成女学園", "area": "新宿区", "type": "私立", "sex": "女子", "score": 35, "lat": 35.691833, "lon": 139.717056},
+  {"name": "愛国", "area": "江戸川区", "type": "私立", "sex": "女子", "score": 35, "lat": 35.74075, "lon": 139.882056},
+  {"name": "帝京八王子", "area": "八王子市", "type": "私立", "sex": "共学", "score": 35, "lat": 35.704028, "lon": 139.242528},
+  {"name": "東星学園", "area": "清瀬市", "type": "私立", "sex": "共学", "score": 35, "lat": 35.774333, "lon": 139.501778},
+  {"name": "松陰", "area": "世田谷区", "type": "私立", "sex": "共学", "score": 35, "lat": 35.6425, "lon": 139.6465},
+  {"name": "駿台学園", "area": "北区", "type": "私立", "sex": "共学", "score": 30, "lat": 35.7605, "lon": 139.739444},
+
+  // --- 埼玉私立 ---
+  {"name": "栄東", "area": "さいたま市見沼区", "type": "私立", "sex": "共学", "score": 63, "lat": 35.945417, "lon": 139.634361},
+  {"name": "浦和明の星女子", "area": "さいたま市緑区", "type": "私立", "sex": "女子", "score": 63, "lat": 35.869717, "lon": 139.708303},
+  {"name": "立教新座", "area": "新座市", "type": "私立", "sex": "男子", "score": 59, "lat": 35.815023, "lon": 139.567513},
+  {"name": "青山学院浦和ルーテル学院", "area": "さいたま市緑区", "type": "私立", "sex": "共学", "score": 57, "lat": 35.897, "lon": 139.719},
+  {"name": "淑徳与野", "area": "さいたま市中央区", "type": "私立", "sex": "女子", "score": 57, "lat": 35.89687, "lon": 139.62804},
+  {"name": "開智所沢", "area": "所沢市", "type": "私立", "sex": "共学", "score": 55, "lat": 35.8025293, "lon": 139.5065942},
+  {"name": "大宮開成", "area": "さいたま市大宮区", "type": "私立", "sex": "共学", "score": 53, "lat": 35.911972, "lon": 139.644917},
+  {"name": "開智", "area": "さいたま市岩槻区", "type": "私立", "sex": "共学", "score": 52, "lat": 35.943, "lon": 139.649},
+  {"name": "埼玉栄", "area": "さいたま市西区", "type": "私立", "sex": "共学", "score": 46, "lat": 35.92606, "lon": 139.5777},
+  {"name": "細田学園", "area": "志木市", "type": "私立", "sex": "共学", "score": 44, "lat": 35.827, "lon": 139.577},
+  {"name": "浦和実業学園", "area": "さいたま市南区", "type": "私立", "sex": "共学", "score": 41, "lat": 35.839556, "lon": 139.676306},
+  {"name": "西武学園文理", "area": "狭山市", "type": "私立", "sex": "共学", "score": 41, "lat": 35.8916393, "lon": 139.4191533},
+  {"name": "星野学園", "area": "川越市", "type": "私立", "sex": "共学", "score": 41, "lat": 35.929, "lon": 139.452},
+  {"name": "城北埼玉", "area": "川越市", "type": "私立", "sex": "男子", "score": 40, "lat": 35.8858746, "lon": 139.5299297},
+  {"name": "開智未来", "area": "加須市", "type": "私立", "sex": "共学", "score": 40, "lat": 36.193611, "lon": 139.654361},
+  {"name": "春日部共栄", "area": "春日部市", "type": "私立", "sex": "共学", "score": 39, "lat": 35.9592053, "lon": 139.7407704},
+  {"name": "昌平", "area": "北葛飾郡杉戸町", "type": "私立", "sex": "共学", "score": 39, "lat": 36.0576, "lon": 139.70079},
+  {"name": "大妻嵐山", "area": "比企郡嵐山町", "type": "私立", "sex": "女子", "score": 38, "lat": 36.03796, "lon": 139.31951},
+  {"name": "狭山ヶ丘", "area": "入間市", "type": "私立", "sex": "共学", "score": 38, "lat": 35.818, "lon": 139.40225},
+  {"name": "獨協埼玉", "area": "越谷市", "type": "私立", "sex": "共学", "score": 38, "lat": 35.939389, "lon": 139.75875},
+  {"name": "城西川越", "area": "川越市", "type": "私立", "sex": "男子", "score": 37, "lat": 35.95447, "lon": 139.4789},
+  {"name": "浦和学院", "area": "さいたま市緑区", "type": "私立", "sex": "共学", "score": 35, "lat": 35.901917, "lon": 139.706528},
+  {"name": "武南", "area": "川口市", "type": "私立", "sex": "共学", "score": 35, "lat": 35.823278, "lon": 139.704556},
+  {"name": "西武台新座", "area": "新座市", "type": "私立", "sex": "共学", "score": 34, "lat": 35.811, "lon": 139.53},
+  {"name": "本庄東高等学校附属", "area": "本庄市", "type": "私立", "sex": "共学", "score": 34, "lat": 36.232444, "lon": 139.200056},
+  {"name": "秀明", "area": "川越市", "type": "私立", "sex": "共学", "score": 34, "lat": 35.852112, "lon": 139.325112},
+  {"name": "聖望学園", "area": "飯能市", "type": "私立", "sex": "共学", "score": 32, "lat": 35.860111, "lon": 139.324139},
+  {"name": "埼玉平成", "area": "入間郡毛呂山町", "type": "私立", "sex": "共学", "score": 30, "lat": 35.939, "lon": 139.342722},
+  {"name": "東京成徳大学深谷", "area": "深谷市", "type": "私立", "sex": "共学", "score": 30, "lat": 36.192528, "lon": 139.260472},
+  {"name": "本庄第一", "area": "本庄市", "type": "私立", "sex": "共学", "score": 30, "lat": 36.251111, "lon": 139.21175}
+];
+
+const map = L.map('map', {tap: true}).setView([35.75, 139.65], 10);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19, attribution: '© OpenStreetMap contributors'
+}).addTo(map);
+
+function color(t) { return t === '共学' ? '#3388ff' : t === '男子' ? '#2ca25f' : '#e34a8a'; }
+
+function radius(s) {
+  return 80 + Math.pow(Math.max(0, s - 30), 2) * 0.6;
+}
+
+const layer = L.layerGroup().addTo(map);
+let selectedSex = 'all';
+
+function draw() {
+  layer.clearLayers();
+  const min = +document.getElementById('min').value;
+  
+  schools.forEach(x => {
+    if (x.score < min) return;
+    if (selectedSex !== 'all' && x.sex !== selectedSex) return;
+
+    const r = radius(x.score);
+    const isPublic = ['国立', '都立', '区立', '市立', '県立'].includes(x.type);
+    const c = L.circle([x.lat, x.lon], {
+      radius: r,
+      // 円の塗り色は従来どおり男女区分。国公立だけ円周を黒系＋破線にして区別。
+      color: isPublic ? '#555555' : color(x.sex),
+      fillColor: color(x.sex),
+      fillOpacity: 0.38,
+      weight: isPublic ? 2.0 : 1.8,
+      dashArray: isPublic ? '4 4' : null
+    }).addTo(layer);
+
+    const popupText = `<b>${x.name}</b><br>${x.area}｜${x.type}｜${x.sex}<br><span class="score">偏差値 ${x.score}</span>`;
+    c.bindPopup(popupText);
+  });
+}
+
+document.querySelectorAll('.sexbtn').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.sexbtn').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  selectedSex = b.dataset.sex;
+  draw();
+}));
+
+document.getElementById('min').addEventListener('input', e => {
+  document.getElementById('minv').textContent = e.target.value;
+  draw();
+});
+
+const legend = L.control({position: 'bottomright'});
+legend.onAdd = function() {
+  const d = L.DomUtil.create('div', 'map-legend');
+  d.innerHTML = '<b>区分</b><br><i style="background:#3388ff"></i>共学<br><i style="background:#2ca25f"></i>男子校<br><i style="background:#e34a8a"></i>女子校<br><span style="display:inline-block;width:22px;border-top:2px dashed #555;margin:0 5px 3px 0;"></span>都立';
+  return d;
+};
+legend.addTo(map);
+
+draw();
+</script>
+</body>
+</html>
