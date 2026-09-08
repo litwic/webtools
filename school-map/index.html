@@ -15,6 +15,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",san
 .score{font-size:20px;font-weight:700}
 .map-legend{background:white;padding:8px 10px;border-radius:6px;box-shadow:0 1px 5px rgba(0,0,0,.25);line-height:1.7;font-size:12px}
 .map-legend i{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:5px}
+.range-wrap{font-size:12px;margin-top:4px}.range-label{display:flex;justify-content:space-between;align-items:center}.range-label b{font-size:13px}.dual-range{position:relative;height:28px;margin:0 8px}.range-track,.range-fill{position:absolute;left:0;right:0;top:11px;height:5px;border-radius:999px}.range-track{background:#d5d5d5}.range-fill{background:#777}.range-input{position:absolute;left:0;top:0;width:100%;height:28px;margin:0;padding:0;background:none;pointer-events:none;-webkit-appearance:none;appearance:none}.range-input::-webkit-slider-runnable-track{height:5px;background:transparent}.range-input::-moz-range-track{height:5px;background:transparent}.range-input::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:18px;height:18px;border-radius:50%;background:#fff;border:2px solid #555;box-shadow:0 1px 4px rgba(0,0,0,.25);pointer-events:auto;cursor:pointer;margin-top:-6.5px}.range-input::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#fff;border:2px solid #555;box-shadow:0 1px 4px rgba(0,0,0,.25);pointer-events:auto;cursor:pointer}.range-input:focus{outline:none}.range-input:focus::-webkit-slider-thumb{box-shadow:0 0 0 3px rgba(0,0,0,.12)}.range-input:focus::-moz-range-thumb{box-shadow:0 0 0 3px rgba(0,0,0,.12)}#min{z-index:3}#max{z-index:2}.range-scale{display:flex;justify-content:space-between;font-size:10px;color:#666;margin:0 5px}
+
 </style>
 </head>
 <body>
@@ -22,9 +24,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",san
 <h1>東京・埼玉 中高一貫校 偏差値マップ</h1>
 <p><b>データ：東京・埼玉 全中高一貫校（都内完全網羅版）</b></p>
 <p>※東京都内の国立・公立・私立中高一貫校を全件網羅し、高精度座標で配置しています。</p>
-<label style="font-size:12px">最低偏差値：
-<input id="min" type="range" min="30" max="74" value="30" step="1">
-<b id="minv">30</b></label>
+<div class="range-wrap">
+  <div class="range-label"><span>偏差値</span><b><span id="minv">30</span> ～ <span id="maxv">74</span></b></div>
+  <div class="dual-range">
+    <div class="range-track"></div>
+    <div class="range-fill" id="rangeFill"></div>
+    <input id="min" class="range-input" type="range" min="30" max="74" value="30" step="1" aria-label="最低偏差値">
+    <input id="max" class="range-input" type="range" min="30" max="74" value="74" step="1" aria-label="最高偏差値">
+  </div>
+  <div class="range-scale"><span>30</span><span>74</span></div>
+</div>
 <div style="margin-top:7px;font-size:12px">
 <b>表示絞り込み：</b>
 <button class="sexbtn active" data-sex="all">すべて</button>
@@ -274,7 +283,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19, attribution: '© OpenStreetMap contributors'
 }).addTo(map);
 
-function color(t) { return t === '共学' ? '#3388ff' : t === '男子' ? '#2ca25f' : '#e34a8a'; }
+function color(t) { return t === '男子' ? '#3388ff' : t === '共学' ? '#2ca25f' : '#e34a8a'; }
 
 function radius(s) {
   return 80 + Math.pow(Math.max(0, s - 30), 2) * 0.6;
@@ -286,9 +295,9 @@ let selectedSex = 'all';
 function draw() {
   layer.clearLayers();
   const min = +document.getElementById('min').value;
-  
+  const max = +document.getElementById('max').value;
   schools.forEach(x => {
-    if (x.score < min) return;
+    if (x.score < min || x.score > max) return;
     if (selectedSex !== 'all' && x.sex !== selectedSex) return;
 
     const r = radius(x.score);
@@ -315,15 +324,34 @@ document.querySelectorAll('.sexbtn').forEach(b => b.addEventListener('click', ()
   draw();
 }));
 
-document.getElementById('min').addEventListener('input', e => {
-  document.getElementById('minv').textContent = e.target.value;
-  draw();
+function updateRangeUI(){
+  const minEl=document.getElementById('min');
+  const maxEl=document.getElementById('max');
+  const min=+minEl.value, max=+maxEl.value;
+  const pctMin=((min-30)/(74-30))*100;
+  const pctMax=((max-30)/(74-30))*100;
+  document.getElementById('minv').textContent=min;
+  document.getElementById('maxv').textContent=max;
+  document.getElementById('rangeFill').style.left=pctMin+'%';
+  document.getElementById('rangeFill').style.right=(100-pctMax)+'%';
+}
+
+document.getElementById('min').addEventListener('input',()=>{
+  const minEl=document.getElementById('min'), maxEl=document.getElementById('max');
+  if(+minEl.value>+maxEl.value) maxEl.value=minEl.value;
+  updateRangeUI(); draw();
 });
+document.getElementById('max').addEventListener('input',()=>{
+  const minEl=document.getElementById('min'), maxEl=document.getElementById('max');
+  if(+maxEl.value<+minEl.value) minEl.value=maxEl.value;
+  updateRangeUI(); draw();
+});
+updateRangeUI();
 
 const legend = L.control({position: 'bottomright'});
 legend.onAdd = function() {
   const d = L.DomUtil.create('div', 'map-legend');
-  d.innerHTML = '<b>区分</b><br><i style="background:#3388ff"></i>共学<br><i style="background:#2ca25f"></i>男子校<br><i style="background:#e34a8a"></i>女子校<br><span style="display:inline-block;width:22px;border-top:2px dashed #555;margin:0 5px 3px 0;"></span>都立';
+  d.innerHTML = '<b>区分</b><br><i style="background:#3388ff"></i>男子校<br><i style="background:#2ca25f"></i>共学<br><i style="background:#e34a8a"></i>女子校<br><span style="display:inline-block;width:22px;border-top:2px dashed #555;margin:0 5px 3px 0;"></span>国公立';
   return d;
 };
 legend.addTo(map);
