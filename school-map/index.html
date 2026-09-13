@@ -16,14 +16,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",san
 .map-legend{background:white;padding:8px 10px;border-radius:6px;box-shadow:0 1px 5px rgba(0,0,0,.25);line-height:1.7;font-size:12px}
 .map-legend i{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:5px}
 .range-wrap{font-size:12px;margin-top:4px}.range-label{display:flex;justify-content:space-between;align-items:center}.range-label b{font-size:13px}.dual-range{position:relative;height:28px;margin:0 8px}.range-track,.range-fill{position:absolute;left:0;right:0;top:11px;height:5px;border-radius:999px}.range-track{background:#d5d5d5}.range-fill{background:#777}.range-input{position:absolute;left:0;top:0;width:100%;height:28px;margin:0;padding:0;background:none;pointer-events:none;-webkit-appearance:none;appearance:none}.range-input::-webkit-slider-runnable-track{height:5px;background:transparent}.range-input::-moz-range-track{height:5px;background:transparent}.range-input::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:18px;height:18px;border-radius:50%;background:#fff;border:2px solid #555;box-shadow:0 1px 4px rgba(0,0,0,.25);pointer-events:auto;cursor:pointer;margin-top:-6.5px}.range-input::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#fff;border:2px solid #555;box-shadow:0 1px 4px rgba(0,0,0,.25);pointer-events:auto;cursor:pointer}.range-input:focus{outline:none}.range-input:focus::-webkit-slider-thumb{box-shadow:0 0 0 3px rgba(0,0,0,.12)}.range-input:focus::-moz-range-thumb{box-shadow:0 0 0 3px rgba(0,0,0,.12)}#min{z-index:3}#max{z-index:2}.range-scale{display:flex;justify-content:space-between;font-size:10px;color:#666;margin:0 5px}
+.home-wrap{margin-top:8px;padding-top:7px;border-top:1px solid #ddd}
+#homeStatus{font-size:10px;color:#555;margin:3px 0 0}
+#distanceBias{accent-color:#777}
+.home-marker{font-size:22px;line-height:22px}
 
+
+</style>
+<style>
+.filter-row{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;width:100%;}.filter-row .filter-item{flex:1 1 0;min-width:0;}.filter-row input[type="range"]{width:100%;margin:0;}.filter-row .slider-label{white-space:nowrap;font-size:12px;}
 </style>
 </head>
 <body>
 <div id="panel">
-<h1>東京・埼玉 中高一貫校 偏差値マップ</h1>
-<p><b>データ：東京・埼玉 中高一貫校（四谷大塚掲載校を基準）</b></p>
-<p>※東京都は四谷大塚の検索結果を基準に、既存校に不足していた学校を追加しています。座標は学校所在地を基準に固定しています。</p>
 <div class="range-wrap">
   <div class="range-label"><span>偏差値</span><b><span id="minv">30</span> ～ <span id="maxv">74</span></b></div>
   <div class="dual-range">
@@ -40,6 +45,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Noto Sans JP","Yu Gothic",san
 <button class="sexbtn" data-sex="共学">共学</button>
 <button class="sexbtn" data-sex="男子">男子校</button>
 <button class="sexbtn" data-sex="女子">女子校</button>
+</div>
+
+<div class="home-wrap">
+  <div><b>自宅・基準地点</b></div>
+  <div style="margin-top:3px">
+    <button id="setHomeBtn" class="sexbtn">地図をクリックして指定</button>
+    <button id="clearHomeBtn" class="sexbtn">解除</button>
+  </div>
+  <p id="homeStatus">未指定（距離バイアスなし）</p>
+</div>
+
+<div class="range-wrap">
+  <div class="range-label">
+    <span>距離バイアス</span>
+    <b><span id="biasv">1.0</span></b>
+  </div>
+  <input id="distanceBias" type="range" min="1" max="10" value="1" step="0.1"
+         style="width:100%;height:22px" aria-label="距離バイアス">
+  <div class="range-scale"><span>1.0</span><span>10.0</span></div>
 </div>
 </div>
 <div id="map"></div>
@@ -290,12 +314,32 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 
 function color(t) { return t === '男子' ? '#3388ff' : t === '共学' ? '#2ca25f' : '#e34a8a'; }
 
-function radius(s) {
-  return 80 + Math.pow(Math.max(0, s - 30), 2) * 0.6;
+function baseRadius(s) {
+  return 100 + Math.pow(Math.max(0, s - 30), 2) * 0.5;
+}
+
+// 自宅からの距離に応じて円の半径を補正。
+function radius(s, lat, lon) {
+  const r = baseRadius(s);
+  if (!homeLocation) return r;
+
+  const distanceKm = map.distance(
+    L.latLng(homeLocation.lat, homeLocation.lon),
+    L.latLng(lat, lon)
+  ) / 1000;
+
+  // バイアス1.0では距離補正なし。
+  // 1.0を超えた分だけ、距離に応じて円を縮小する。
+  const factor = 1 / (1 + (distanceBias - 1) * distanceKm / 20);
+  return r * factor;
 }
 
 const layer = L.layerGroup().addTo(map);
 let selectedSex = 'all';
+let homeLocation = null;
+let homeMarker = null;
+let selectingHome = false;
+let distanceBias = 1.0;
 
 function draw() {
   layer.clearLayers();
@@ -305,7 +349,7 @@ function draw() {
     if (x.score < min || x.score > max) return;
     if (selectedSex !== 'all' && x.sex !== selectedSex) return;
 
-    const r = radius(x.score);
+    const r = radius(x.score, x.lat, x.lon);
     const isPublic = ['国立', '都立', '区立', '市立', '県立'].includes(x.type);
     const c = L.circle([x.lat, x.lon], {
       radius: r,
@@ -321,6 +365,68 @@ function draw() {
     c.bindPopup(popupText);
   });
 }
+
+function updateHomeStatus() {
+  const el = document.getElementById('homeStatus');
+  if (!homeLocation) {
+    el.textContent = '未指定（距離バイアスなし）';
+  } else {
+    el.textContent = `指定：${homeLocation.lat.toFixed(5)}, ${homeLocation.lon.toFixed(5)} ／ 距離バイアス ${distanceBias.toFixed(1)}`;
+  }
+}
+
+function setHome(latlng) {
+  homeLocation = {lat: latlng.lat, lon: latlng.lng};
+
+  if (homeMarker) map.removeLayer(homeMarker);
+
+  homeMarker = L.marker([latlng.lat, latlng.lng], {
+    title: '自宅・基準地点',
+    draggable: true
+  }).addTo(map);
+
+  homeMarker.bindPopup('<b>自宅・基準地点</b><br>ドラッグして位置を調整できます。');
+
+  homeMarker.on('dragend', () => {
+    const p = homeMarker.getLatLng();
+    homeLocation = {lat: p.lat, lon: p.lng};
+    updateHomeStatus();
+    draw();
+  });
+
+  selectingHome = false;
+  document.getElementById('setHomeBtn').textContent = '地図をクリックして指定';
+  updateHomeStatus();
+  draw();
+}
+
+document.getElementById('setHomeBtn').addEventListener('click', () => {
+  selectingHome = true;
+  document.getElementById('setHomeBtn').textContent = '地図上の自宅位置をクリック';
+});
+
+document.getElementById('clearHomeBtn').addEventListener('click', () => {
+  homeLocation = null;
+  selectingHome = false;
+  document.getElementById('setHomeBtn').textContent = '地図をクリックして指定';
+  if (homeMarker) {
+    map.removeLayer(homeMarker);
+    homeMarker = null;
+  }
+  updateHomeStatus();
+  draw();
+});
+
+map.on('click', e => {
+  if (selectingHome) setHome(e.latlng);
+});
+
+document.getElementById('distanceBias').addEventListener('input', e => {
+  distanceBias = +e.target.value;
+  document.getElementById('biasv').textContent = distanceBias.toFixed(1);
+  updateHomeStatus();
+  draw();
+});
 
 document.querySelectorAll('.sexbtn').forEach(b => b.addEventListener('click', () => {
   document.querySelectorAll('.sexbtn').forEach(x => x.classList.remove('active'));
@@ -352,6 +458,8 @@ document.getElementById('max').addEventListener('input',()=>{
   updateRangeUI(); draw();
 });
 updateRangeUI();
+document.getElementById('biasv').textContent = distanceBias.toFixed(1);
+updateHomeStatus();
 
 const legend = L.control({position: 'bottomright'});
 legend.onAdd = function() {
